@@ -11,7 +11,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1"
+        versionName = "0.2"
     }
     buildFeatures { compose = true }
     compileOptions {
@@ -27,4 +27,5 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.foundation:foundation")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }
