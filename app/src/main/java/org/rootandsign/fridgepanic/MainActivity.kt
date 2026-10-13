@@ -2,6 +2,8 @@ package org.rootandsign.fridgepanic
 
 import android.os.Bundle
 import android.content.Context
+import android.app.DatePickerDialog
+import java.time.format.DateTimeFormatter
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -66,6 +68,8 @@ fun FridgeApp() {
     val foods = remember { mutableStateListOf<Food>().apply { addAll(readFoods(context)) } }
     var name by remember { mutableStateOf("") }
     var days by remember { mutableStateOf("3") }
+    var dateMode by remember { mutableStateOf(false) }
+    var selectedDate by remember { mutableStateOf(LocalDate.now().plusDays(3)) }
     var tab by remember { mutableIntStateOf(0) }
     var scannerMessage by remember { mutableStateOf("") }
     var scanning by remember { mutableStateOf(false) }
@@ -91,13 +95,28 @@ fun FridgeApp() {
                 Spacer(Modifier.height(12.dp))
                 if (tab == 0) {
                     OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Food name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                    OutlinedTextField(value = days, onValueChange = { days = it.filter(Char::isDigit).take(4) }, label = { Text("Days until use-by") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { dateMode = false }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = if (!dateMode) scheme.primary else scheme.surface, contentColor = if (!dateMode) scheme.onPrimary else scheme.onSurface)) { Text("Days left") }
+                        Button(onClick = { dateMode = true }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = if (dateMode) scheme.primary else scheme.surface, contentColor = if (dateMode) scheme.onPrimary else scheme.onSurface)) { Text("Use-by date") }
+                    }
+                    if (!dateMode) {
+                        OutlinedTextField(value = days, onValueChange = { days = it.filter(Char::isDigit).take(4) }, label = { Text("Days until use-by") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
+                    } else {
+                        OutlinedButton(onClick = {
+                            DatePickerDialog(context, { _, year, month, day ->
+                                selectedDate = LocalDate.of(year, month + 1, day)
+                            }, selectedDate.year, selectedDate.monthValue - 1, selectedDate.dayOfMonth).show()
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Choose date: ${selectedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))} 📅")
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = {
                             val n = days.toLongOrNull()
-                            if (name.isNotBlank() && n != null) {
-                                foods.add(Food(System.nanoTime(), name.trim(), LocalDate.now().plusDays(n).toString()))
+                            if (name.isNotBlank() && (dateMode || n != null)) {
+                                val useBy = if (dateMode) selectedDate else LocalDate.now().plusDays(n!!)
+                                foods.add(Food(System.nanoTime(), name.trim(), useBy.toString()))
                                 saveFoods(context, foods)
                                 name = ""
                                 days = "3"
