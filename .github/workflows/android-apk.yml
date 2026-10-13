@@ -14,9 +14,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - name: Install Android SDK 35
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" || test ${PIPESTATUS[1]} -eq 0
       - name: Install Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
