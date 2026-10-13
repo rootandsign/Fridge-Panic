@@ -15,7 +15,13 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Install Android SDK 35
-        run: yes | sdkmanager "platforms;android-35" "build-tools;35.0.0" || test ${PIPESTATUS[1]} -eq 0
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -1)"
+          fi
+          test -n "$SDKMANAGER" && test -x "$SDKMANAGER"
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
       - name: Install Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
