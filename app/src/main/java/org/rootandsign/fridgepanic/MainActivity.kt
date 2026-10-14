@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -68,17 +69,18 @@ class MainActivity : ComponentActivity() {
 fun FridgeApp() {
     val context = LocalContext.current
     val foods = remember { mutableStateListOf<Food>().apply { addAll(readFoods(context)) } }
-    var name by remember { mutableStateOf("") }
-    var days by remember { mutableStateOf("3") }
-    var dateMode by remember { mutableStateOf(false) }
-    var selectedDate by remember { mutableStateOf(LocalDate.now().plusDays(3)) }
-    var tab by remember { mutableIntStateOf(0) }
-    var location by remember { mutableStateOf("Fridge") }
-    var filterLocation by remember { mutableStateOf("All") }
+    var name by rememberSaveable { mutableStateOf("") }
+    var days by rememberSaveable { mutableStateOf("3") }
+    var dateMode by rememberSaveable { mutableStateOf(false) }
+    var selectedDateText by rememberSaveable { mutableStateOf(LocalDate.now().plusDays(3).toString()) }
+    var selectedDate by remember(selectedDateText) { mutableStateOf(LocalDate.parse(selectedDateText)) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var location by rememberSaveable { mutableStateOf("Fridge") }
+    var filterLocation by rememberSaveable { mutableStateOf("All") }
     var editing by remember { mutableStateOf<Food?>(null) }
-    var editName by remember { mutableStateOf("") }
+    var editName by rememberSaveable { mutableStateOf("") }
     var editDate by remember { mutableStateOf(LocalDate.now()) }
-    var editLocation by remember { mutableStateOf("Fridge") }
+    var editLocation by rememberSaveable { mutableStateOf("Fridge") }
     var scannerMessage by remember { mutableStateOf("") }
     var scanning by remember { mutableStateOf(false) }
     val dark = isSystemInDarkTheme()
@@ -122,6 +124,7 @@ fun FridgeApp() {
                         OutlinedButton(onClick = {
                             DatePickerDialog(context, { _, year, month, day ->
                                 selectedDate = LocalDate.of(year, month + 1, day)
+                                selectedDateText = selectedDate.toString()
                             }, selectedDate.year, selectedDate.monthValue - 1, selectedDate.dayOfMonth).show()
                         }, modifier = Modifier.fillMaxWidth()) {
                             Text("Choose date: ${selectedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))} 📅")
