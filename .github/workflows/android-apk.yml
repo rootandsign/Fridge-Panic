@@ -26,6 +26,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Prepare launcher icon
+        run: |
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          cp app/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
