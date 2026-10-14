@@ -202,9 +202,13 @@ fun FridgeApp() {
                     }
                 }
                 Spacer(Modifier.height(6.dp))
-                val visible = foods.filter { (tab == 0 || daysLeft(it) <= 2L) && (filterLocation == "All" || it.location == filterLocation) }.sortedBy { daysLeft(it) }
+                val visible = foods.filter { filterLocation == "All" || it.location == filterLocation }.sortedWith(compareBy<Food> { daysLeft(it) }.thenBy { it.name })
+                if (tab == 1) {
+                    Text("Soonest use-by date first", color = accent, fontWeight = FontWeight.SemiBold)
+                    if (visible.isNotEmpty() && visible.none { daysLeft(it) <= 2L }) Text("🎉 Nothing urgent yet! Here is what to eat next.", color = accent)
+                }
                 if (visible.isEmpty()) {
-                    Text(if (tab == 1) "🎉 Nothing urgent! Your fridge can relax." else "🧊✨ It's empty here! Add something tasty.", color = accent)
+                    Text("🧊✨ It's empty here! Add something tasty in My Fridge.", color = accent)
                     Spacer(Modifier.height(10.dp))
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
