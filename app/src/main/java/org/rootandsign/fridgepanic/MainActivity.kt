@@ -7,6 +7,8 @@ import java.time.format.DateTimeFormatter
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,7 +32,7 @@ import java.net.URL
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
-data class Food(val id: Long, val name: String, val useBy: String)
+data class Food(val id: Long, val name: String, val useBy: String, val location: String = "Fridge")
 private val mint = Color(0xFF18BDAA)
 private val coral = Color(0xFFE66D6D)
 private fun daysLeft(food: Food): Long = try {
@@ -43,14 +45,14 @@ private fun readFoods(context: Context): List<Food> {
         val array = JSONArray(raw)
         (0 until array.length()).map { index ->
             val obj = array.getJSONObject(index)
-            Food(obj.getLong("id"), obj.getString("name"), obj.getString("useBy"))
+            Food(obj.getLong("id"), obj.getString("name"), obj.getString("useBy"), obj.optString("location", "Fridge"))
         }
     } catch (_: Exception) { emptyList() }
 }
 private fun saveFoods(context: Context, foods: List<Food>) {
     val array = JSONArray()
     foods.forEach { food ->
-        array.put(JSONObject().put("id", food.id).put("name", food.name).put("useBy", food.useBy))
+        array.put(JSONObject().put("id", food.id).put("name", food.name).put("useBy", food.useBy).put("location", food.location))
     }
     context.getSharedPreferences("groceries", Context.MODE_PRIVATE).edit().putString("foods", array.toString()).apply()
 }
@@ -71,6 +73,12 @@ fun FridgeApp() {
     var dateMode by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf(LocalDate.now().plusDays(3)) }
     var tab by remember { mutableIntStateOf(0) }
+    var location by remember { mutableStateOf("Fridge") }
+    var filterLocation by remember { mutableStateOf("All") }
+    var editing by remember { mutableStateOf<Food?>(null) }
+    var editName by remember { mutableStateOf("") }
+    var editDate by remember { mutableStateOf(LocalDate.now()) }
+    var editLocation by remember { mutableStateOf("Fridge") }
     var scannerMessage by remember { mutableStateOf("") }
     var scanning by remember { mutableStateOf(false) }
     val dark = isSystemInDarkTheme()
@@ -78,6 +86,8 @@ fun FridgeApp() {
                  else lightColorScheme(primary = Color(0xFF087F73), secondary = coral, background = Color(0xFFF8FAFC), surface = Color.White)
     val accent = if (dark) Color(0xFF5EEAD4) else Color(0xFF087F73)
     val urgent = foods.count { daysLeft(it) <= 2L }
+    val expired = foods.count { daysLeft(it) < 0L }
+    val warning = foods.count { daysLeft(it) in 3L..5L }
 
     MaterialTheme(colorScheme = scheme) {
         Surface(color = scheme.background, modifier = Modifier.fillMaxSize()) {
@@ -85,8 +95,15 @@ fun FridgeApp() {
                 Spacer(Modifier.height(20.dp))
                 Text("FRIDGE PANIC!", color = accent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Spacer(Modifier.height(8.dp))
-                Text(if (urgent > 0) "Your fridge is panicking! 😱" else "Your fridge is happy! 😎", fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                Text("$urgent food(s) need attention", color = coral)
+                Card(colors = CardDefaults.cardColors(containerColor = scheme.surface), shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(if (expired > 0) "🧊😱" else if (urgent > 0) "🧊😰" else if (warning > 0) "🧊😬" else "🧊😎", fontSize = 42.sp)
+                        Column {
+                            Text(if (expired > 0) "Oh no! Food expired!" else if (urgent > 0) "Your fridge is panicking!" else if (warning > 0) "Keep an eye on your food!" else "Your fridge is happy!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Text(if (urgent == 0) "Everything looks good!" else "$urgent food(s) need attention", color = if (urgent > 0) coral else accent)
+                        }
+                    }
+                }
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { tab = 0 }, modifier = Modifier.weight(1f)) { Text("My Fridge") }
@@ -110,13 +127,19 @@ fun FridgeApp() {
                             Text("Choose date: ${selectedDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))} 📅")
                         }
                     }
+                    Text("Store in", color = accent, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        listOf("Fridge", "Freezer", "Pantry").forEach { place ->
+                            FilterChip(selected = location == place, onClick = { location = place }, label = { Text(place) })
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = {
                             val n = days.toLongOrNull()
                             if (name.isNotBlank() && (dateMode || n != null)) {
                                 val useBy = if (dateMode) selectedDate else LocalDate.now().plusDays(n!!)
-                                foods.add(Food(System.nanoTime(), name.trim(), useBy.toString()))
+                                foods.add(Food(System.nanoTime(), name.trim(), useBy.toString(), location))
                                 saveFoods(context, foods)
                                 name = ""
                                 days = "3"
@@ -169,28 +192,81 @@ fun FridgeApp() {
                 } else {
                     Text("Use these ingredients soon!", color = accent, fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.height(12.dp))
-                val visible = if (tab == 0) foods.toList().sortedBy { daysLeft(it) } else foods.filter { daysLeft(it) <= 2L }.sortedBy { daysLeft(it) }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    listOf("All", "Fridge", "Freezer", "Pantry").forEach { place ->
+                        FilterChip(selected = filterLocation == place, onClick = { filterLocation = place }, label = { Text(place, fontSize = 11.sp) })
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                val visible = foods.filter { (tab == 0 || daysLeft(it) <= 2L) && (filterLocation == "All" || it.location == filterLocation) }.sortedBy { daysLeft(it) }
+                if (visible.isEmpty()) {
+                    Text(if (tab == 1) "🎉 Nothing urgent! Your fridge can relax." else "🧊✨ It's empty here! Add something tasty.", color = accent)
+                    Spacer(Modifier.height(10.dp))
+                }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
                     items(visible, key = { it.id }) { food ->
                         Card(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
                             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(food.name, fontWeight = FontWeight.Bold)
+                                    Text(food.location, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
                                     val remaining = daysLeft(food)
                                     Text(when {
                                         remaining < 0 -> "Past use-by • ${-remaining} day(s)"
                                         remaining <= 2 -> "Use soon • $remaining day(s)"
                                         else -> "$remaining day(s) remaining"
-                                    }, color = if (remaining <= 2) coral else accent)
+                                    }, color = when { remaining <= 2 -> coral; remaining <= 5 -> Color(0xFFD89B22); else -> accent })
                                 }
-                                TextButton(onClick = { foods.remove(food); saveFoods(context, foods) }) { Text("Used ✓") }
+                                Column {
+                                    TextButton(onClick = {
+                                        editing = food
+                                        editName = food.name
+                                        editDate = try { LocalDate.parse(food.useBy) } catch (_: Exception) { LocalDate.now() }
+                                        editLocation = food.location
+                                    }) { Text("Edit") }
+                                    TextButton(onClick = { foods.remove(food); saveFoods(context, foods) }) { Text("Used ✓") }
+                                }
                             }
                         }
                     }
                 }
-                Text("Saved on this phone • Dates are estimates", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f), fontSize = 11.sp)
+                Text("Offline • Saved on this phone • Dates are estimates", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f), fontSize = 11.sp)
             }
+        }
+        if (editing != null) {
+            AlertDialog(
+                onDismissRequest = { editing = null },
+                title = { Text("Edit grocery") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(value = editName, onValueChange = { editName = it }, label = { Text("Food name") }, singleLine = true)
+                        OutlinedButton(onClick = {
+                            DatePickerDialog(context, { _, y, m, d -> editDate = LocalDate.of(y, m + 1, d) }, editDate.year, editDate.monthValue - 1, editDate.dayOfMonth).show()
+                        }) { Text("Use by: ${editDate.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))} 📅") }
+                        listOf("Fridge", "Freezer", "Pantry").forEach { place ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = editLocation == place, onClick = { editLocation = place })
+                                Text(place)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val current = editing
+                        if (current != null && editName.isNotBlank()) {
+                            val index = foods.indexOfFirst { it.id == current.id }
+                            if (index >= 0) {
+                                foods[index] = current.copy(name = editName.trim(), useBy = editDate.toString(), location = editLocation)
+                                saveFoods(context, foods)
+                            }
+                            editing = null
+                        }
+                    }) { Text("Save") }
+                },
+                dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } }
+            )
         }
     }
 }
