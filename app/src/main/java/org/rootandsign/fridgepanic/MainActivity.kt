@@ -91,7 +91,7 @@ fun FridgeApp() {
 
     MaterialTheme(colorScheme = scheme) {
         Surface(color = scheme.background, modifier = Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize().padding(20.dp)) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(20.dp)) {
                 Spacer(Modifier.height(20.dp))
                 Text("FRIDGE PANIC!", color = accent, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Spacer(Modifier.height(8.dp))
@@ -140,9 +140,12 @@ fun FridgeApp() {
                             if (name.isNotBlank() && (dateMode || n != null)) {
                                 val useBy = if (dateMode) selectedDate else LocalDate.now().plusDays(n!!)
                                 foods.add(Food(System.nanoTime(), name.trim(), useBy.toString(), location))
+                                scannerMessage = "Added ✓"
                                 saveFoods(context, foods)
                                 name = ""
                                 days = "3"
+                            } else {
+                                scannerMessage = "Enter a food name and valid days, or choose a use-by date."
                             }
                         }, modifier = Modifier.weight(1f)) { Text("Add Food +") }
                         OutlinedButton(enabled = !scanning, onClick = {
@@ -204,8 +207,8 @@ fun FridgeApp() {
                     Text(if (tab == 1) "🎉 Nothing urgent! Your fridge can relax." else "🧊✨ It's empty here! Add something tasty.", color = accent)
                     Spacer(Modifier.height(10.dp))
                 }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-                    items(visible, key = { it.id }) { food ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    visible.forEach { food ->
                         Card(shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
                             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
