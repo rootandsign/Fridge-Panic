@@ -1,6 +1,9 @@
 package org.rootandsign.fridgepanic
 
 import android.os.Bundle
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Context
 import android.app.DatePickerDialog
 import java.time.format.DateTimeFormatter
@@ -50,6 +53,36 @@ private fun readFoods(context: Context): List<Food> {
         }
     } catch (_: Exception) { emptyList() }
 }
+private fun exportFoods(foods: List<Food>): String {
+    val entries = JSONArray()
+    foods.forEach { food ->
+        entries.put(JSONObject().put("id", food.id).put("name", food.name)
+            .put("useBy", food.useBy).put("location", food.location))
+    }
+    return JSONObject().put("format", "fridge-panic-backup")
+        .put("version", 1).put("foods", entries).toString(2)
+}
+
+private fun importFoods(raw: String): List<Food> {
+    val root = JSONObject(raw)
+    require(root.optString("format") == "fridge-panic-backup" && root.optInt("version") == 1) {
+        "Not a supported Fridge Panic backup"
+    }
+    val array = root.getJSONArray("foods")
+    require(array.length() <= 10000) { "Backup contains too many entries" }
+    return (0 until array.length()).map { i ->
+        val obj = array.getJSONObject(i)
+        val name = obj.getString("name").trim()
+        require(name.isNotEmpty() && name.length <= 500) { "Invalid food name" }
+        val date = LocalDate.parse(obj.getString("useBy"))
+        val place = obj.optString("location", "Fridge")
+        require(place in listOf("Fridge", "Freezer", "Pantry")) { "Invalid storage location" }
+        Food(obj.getLong("id"), name, date.toString(), place)
+    }.also { entries ->
+        require(entries.map { it.id }.distinct().size == entries.size) { "Duplicate food IDs" }
+    }
+}
+
 private fun saveFoods(context: Context, foods: List<Food>) {
     val array = JSONArray()
     foods.forEach { food ->
@@ -83,6 +116,37 @@ fun FridgeApp() {
     var editLocation by rememberSaveable { mutableStateOf("Fridge") }
     var scannerMessage by remember { mutableStateOf("") }
     var scanning by remember { mutableStateOf(false) }
+    var restorePreview by remember { mutableStateOf<List<Food>?>(null) }
+    var backupMessage by remember { mutableStateOf("") }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                    stream.write(exportFoods(foods).toByteArray(Charsets.UTF_8))
+                } ?: error("Cannot open backup destination")
+                backupMessage = "Backup saved. Keep the file somewhere safe."
+            } catch (e: Exception) {
+                backupMessage = "Backup failed: ${e.message ?: "Could not write file"}"
+            }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val raw = context.contentResolver.openInputStream(uri)?.use { stream ->
+                    stream.bufferedReader(Charsets.UTF_8).readText()
+                } ?: error("Cannot read selected file")
+                restorePreview = importFoods(raw)
+                backupMessage = ""
+            } catch (e: Exception) {
+                backupMessage = "Restore failed: ${e.message ?: "Invalid backup"}"
+            }
+        }
+    }
     val dark = isSystemInDarkTheme()
     val scheme = if (dark) darkColorScheme(primary = Color(0xFF5EEAD4), secondary = coral, background = Color(0xFF101827), surface = Color(0xFF24334A))
                  else lightColorScheme(primary = Color(0xFF087F73), secondary = coral, background = Color(0xFFF8FAFC), surface = Color.White)
@@ -241,8 +305,40 @@ fun FridgeApp() {
                         }
                     }
                 }
+                Spacer(Modifier.height(14.dp))
+                Text("Your food backup", color = accent, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        exportLauncher.launch("Fridge-Panic-backup-${LocalDate.now()}.json")
+                    }, modifier = Modifier.weight(1f)) { Text("Backup") }
+                    OutlinedButton(onClick = {
+                        importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                    }, modifier = Modifier.weight(1f)) { Text("Restore") }
+                }
+                Text("Save a backup before uninstalling or changing phones. Restoring replaces your current food list.", fontSize = 11.sp)
+                if (backupMessage.isNotBlank()) Text(backupMessage, color = accent, fontSize = 12.sp)
                 Text("Offline • Saved on this phone • Dates are estimates", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f), fontSize = 11.sp)
             }
+        }
+        if (restorePreview != null) {
+            AlertDialog(
+                onDismissRequest = { restorePreview = null },
+                title = { Text("Restore food backup?") },
+                text = { Text("This will replace your current ${foods.size} food(s) with ${restorePreview?.size ?: 0} food(s) from the selected backup. This cannot be undone unless you saved a separate backup.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val restored = restorePreview
+                        if (restored != null) {
+                            foods.clear()
+                            foods.addAll(restored)
+                            saveFoods(context, foods)
+                            backupMessage = "Restored ${restored.size} food(s) successfully."
+                        }
+                        restorePreview = null
+                    }) { Text("Replace list") }
+                },
+                dismissButton = { TextButton(onClick = { restorePreview = null }) { Text("Cancel") } }
+            )
         }
         if (editing != null) {
             AlertDialog(
