@@ -11,6 +11,7 @@ Keep track of food in your fridge, freezer, and pantry. Fridge Panic! shows what
 - Mark food as used
 - Scan product barcodes to look up product names (internet required; not every product is in the database)
 - Store your list on your device; normal use does not require a server
+- **Backup & Restore:** export food names, dates, and storage locations to a JSON file and restore them later (restore replaces the current list after confirmation)
 - Light and dark themes
 
 **Important:** Scanning a barcode does **not** determine the expiration date. Enter and verify dates yourself. Date reminders are not food-safety guarantees.
@@ -28,14 +29,14 @@ Open **Actions**, choose **Build Android APK**, and run the workflow. Download t
 ## Data and privacy
 Food entries are stored locally on the device using Android SharedPreferences. Barcode lookups send scanned product codes to Open Food Facts. No login or cloud syncing is provided.
 
-**Back up your list manually before uninstalling, clearing app data, or switching phones.** These actions may remove your entries. Android backups can vary by device and settings.
+**Use the in-app Backup button and keep the exported JSON file outside the app before uninstalling, clearing app data, or switching phones.** These actions may remove your entries. Android backups can vary by device and settings.
 
 ## Beta feedback
 Please report bugs under [Issues](https://github.com/rootandsign/Fridge-Panic/issues). Helpful details: Android version, steps to reproduce, expected result, and actual result. Avoid including private information.
 
 ## Release checklist
 - [ ] Confirm app builds successfully on GitHub Actions
-- [ ] Test add/edit/use, rotation, reopening, midnight date rollover, and barcode failure handling
+- [ ] Test add/edit/use, rotation, reopening, midnight date rollover, barcode failure handling, and backup/restore with real files
 - [ ] Capture and add screenshots to this README
 - [ ] Create and securely back up a **private release signing key**; never commit it to GitHub
 - [ ] Configure release signing and build a signed release APK
